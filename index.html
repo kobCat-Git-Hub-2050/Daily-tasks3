@@ -2278,10 +2278,28 @@ const needWarn = () => !window.AndroidBridge && !LS.get('tm.nowarn') && (locatio
   }
 }
   function lockNow(logout) {
-  closeAll(); toggleMenu(false);
-  const u = S.user; S.user = null; S.data = null; S.set = null; dayOpen = null;
-  SS.del('tm.s'); $('#grid').innerHTML = '';
-  if (!logout && u) showLock(u); else showLogin();
+  closeAll(); 
+  toggleMenu(false);
+  const u = S.user; 
+  S.user = null; 
+  S.data = null; 
+  S.set = null; 
+  dayOpen = null;
+  SS.del('tm.s'); 
+  $('#grid').innerHTML = '';
+  
+  if (logout) {
+    // إذا كان تسجيل خروج كامل، اذهب شاشة تسجيل الدخول
+    showLogin();
+  } else if (u) {
+    // إذا كان قفل مؤقت، اعرض شاشة الرقم السري لنفس المستخدم
+    showLock(u);
+  } else {
+    const us = users();
+    const last = us.find(x => x.id === LS.get('tm.last')) || us[0];
+    if (last) showLock(last);
+    else showLogin();
+  }
 }
   function showRegister(first) {
   const el = overlay('<h2>إنشاء حساب</h2><p class="d">' + (first ? 'مرحبًا بك في تقويمي – مهام. أنشئ حسابك وحدد رقمًا سريًا للدخول.' : 'أنشئ حسابًا جديدًا على هذا الجهاز') + '</p><div id="aerr"></div>' +
@@ -2525,15 +2543,26 @@ window.__onBack = () => {
   return false;
 };
 window.__tm = { S: () => S, hij: n => hij(n, 0), todayN };
-
-function init() {
+  function init() {
   buildStatic();
-  const us = users(), u = us.find(x => x.id === LS.get('tm.last')) || null;
-  if (!us.length) { showRegister(true); return; }
-  if (u && SS.get('tm.s') === u.id) { enter(u); return; }
-  if (u) showLock(u); else showLogin();
+  const us = users();
+  if (!us.length) { 
+    showRegister(true); 
+    return; 
+  }
+  
+  // استرجاع آخر مستخدم نشط
+  const lastId = LS.get('tm.last');
+  const u = us.find(x => x.id === lastId) || us[0];
+  
+  if (u) {
+    // إجبار التطبيق دائماً على الدخول لشاشة القفل عند الفتح الأولي لحماية البيانات
+    showLock(u);
+  } else {
+    showLogin();
+  }
 }
-init();
+  init();
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => { });
 })();
 </script>
