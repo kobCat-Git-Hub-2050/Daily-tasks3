@@ -9,7 +9,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     
-    # صلاحيات ضرورية لتمكين الكود من إنشاء الـ Release ورفع الملف إليه
     permissions:
       contents: write
 
@@ -21,7 +20,10 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: android-actions/setup-android@v3
+      # تثبيت منصات وحزم الأندرويد الأساسية مباشرة عبر أداة سطر الأوامر دون الاعتماد على الإجراء القديم
+      - name: Setup Android SDK manually
+        run: |
+          echo "y" | sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
 
       - uses: gradle/actions/setup-gradle@v4
         with:
@@ -34,14 +36,12 @@ jobs:
         working-directory: android
         run: gradle assembleDebug --stacktrace
 
-      # خطوة لإنشاء تاج رقمي فريد يعتمد على وقت النظام لتجنب التعارض
       - name: Generate Tag
         id: tag
         run: |
           tag_name="v1.0.$(date +%Y%m%d%H%M%S)"
           echo "tag_name=$tag_name" >> $GITHUB_OUTPUT
 
-      # خطوة نشر الإصدار ورفع ملف الـ APK مباشرة إلى قسم Releases
       - name: Release APK
         uses: softprops/action-gh-release@v2
         with:
