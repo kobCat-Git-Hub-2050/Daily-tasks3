@@ -1,53 +1,55 @@
-name: Build APK
+name: Build and Release APK
 
 on:
   workflow_dispatch:
   push:
-    paths:
-      - '.github/workflows/build-apk.yml'
-
-permissions:
-  contents: write
+    branches: [ main, master ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    
+    # صلاحيات ضرورية لتمكين الكود من إنشاء الـ Release ورفع الملف إليه
+    permissions:
+      contents: write
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
 
       - name: Generate the Android project from index.html
-        run: |
-          F=$(find . -name make_project.py -not -path './android/*' | head -n 1)
-          if [ -z "$F" ]; then echo "ERROR: make_project.py was not uploaded to the repository"; exit 1; fi
-          python3 "$F"
+        run: python3 make_project.py
 
       - name: Build debug APK
         working-directory: android
         run: gradle assembleDebug --stacktrace
 
-      - name: Name the APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk taqwimi.apk
+      # خطوة لإنشاء تاج رقمي فريد يعتمد على وقت النظام لتجنب التعارض
+      - name: Generate Tag
+        id: tag
+        run: |
+          tag_name="v1.0.$(date +%Y%m%d%H%M%S)"
+          echo "tag_name=$tag_name" >> $GITHUB_OUTPUT
 
-      - name: Keep a copy as a build artifact
-        uses: actions/upload-artifact@v4
+      # خطوة نشر الإصدار ورفع ملف الـ APK مباشرة إلى قسم Releases
+      - name: Release APK
+        uses: softprops/action-gh-release@v2
         with:
-          name: taqwimi-apk
-          path: taqwimi.apk
-
-      - name: Publish taqwimi.apk as a release
-        continue-on-error: true
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+          tag_name: ${{ steps.tag.outputs.tag_name }}
+          name: "Automatic App Release ${{ steps.tag.outputs.tag_name }}"
+          body: "تطبيق تقويمي مهام (Taqwimi Mahaam) مبني ومحدث تلقائياً عبر GitHub Actions."
+          draft: false
+          prerelease: false
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "apk-${{ github.run_number }}" taqwimi.apk --title "Taqwimi APK ${{ github.run_number }}" --notes "Debug APK built from this repository."
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
