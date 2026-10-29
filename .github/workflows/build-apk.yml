@@ -1,8 +1,9 @@
 name: Build APK
 
 on:
-  push:
   workflow_dispatch:
+  push:
+    branches: [ main, master ]
 
 jobs:
   build:
@@ -15,20 +16,20 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - uses: android-actions/setup-android@v3
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
 
-      - name: اختبارات منطق التنبيهات
-        run: bash verify/run_tests.sh
+      - name: Generate the Android project from index.html
+        run: python3 make_project.py
 
-      - name: بناء APK
-        run: gradle assembleDebug --no-daemon
-
-      - name: تسمية الملف
-        run: cp app/build/outputs/apk/debug/app-debug.apk taqwimi-1.apk
+      - name: Build debug APK
+        working-directory: android
+        run: gradle assembleDebug --stacktrace
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Daily-tasks1-apk-${{ github.run_number }}
-          path: taqwimi-1.apk
+          name: taqwimi-mahaam-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
