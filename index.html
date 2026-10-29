@@ -1946,7 +1946,6 @@ function openPhonebook() {
   $('#pbsearch', s).addEventListener('input', draw);
   draw();
 }
-  
   /* ---------- settings ---------- */
   function openSettings() {
   const c = S.set.colors, fnt = S.set.fonts || { day: 19, notes: 12, sub: 13 };
@@ -1987,6 +1986,7 @@ function openPhonebook() {
   const setOff = d => { S.set.off = Math.max(-30, Math.min(30, S.set.off + d)); persist(); render(); pv(); };
   $('#om', s).onclick = () => setOff(-1);
   $('#op', s).onclick = () => setOff(1);
+  $$('#sv button', s).forEach(b => b.classList.toggle('on', b.dataset.v === S.set.view));
   $$('#sv button', s).forEach(b => b.onclick = () => { S.set.view = b.dataset.v; S.view = viewFor(S.sel != null ? S.sel : todayN()); persist(); render(); pv(); });
   $('#kbg', s).addEventListener('input', ev => { S.set.colors.bg = ev.target.value; applyColors(); });
   $('#kbg', s).addEventListener('change', persist);
@@ -2005,7 +2005,7 @@ function openPhonebook() {
   $('#nben', s).addEventListener('change', ev => {
     S.set.notify.enabled = ev.target.checked;
     if (window.AndroidBridge && window.AndroidBridge.requestNotificationPermission) {
-      window.AndroidBridge.requestNotificationPermission();
+      try { window.AndroidBridge.requestNotificationPermission(); } catch(e){}
     } else if (ev.target.checked && 'Notification' in window && Notification.permission !== 'granted') {
       Notification.requestPermission();
     }
@@ -2015,41 +2015,54 @@ function openPhonebook() {
     S.set.notify.days = Math.max(0, Math.min(30, +ev.target.value || 0));
     persist(); checkNotifications();
   });
+  
+  // زر اختبار الإشعارات والتنبيهات المصحح
   $('#nbtest', s).onclick = () => {
     const title = 'تقويمي – مهام';
     const body = 'هذا تنبيه تجريبي ✅';
     if (window.AndroidBridge) {
-      if (window.AndroidBridge.requestNotificationPermission) {
-        window.AndroidBridge.requestNotificationPermission();
-      }
+      try {
+        if (window.AndroidBridge.requestNotificationPermission) {
+          window.AndroidBridge.requestNotificationPermission();
+        }
+      } catch(e){}
       setTimeout(() => {
         try {
           if (window.AndroidBridge.notify) {
             window.AndroidBridge.notify(title, body);
             toast('تم إرسال التنبيه');
+          } else {
+            toast('التنبيهات تعمل عبر نظام الأندرويد');
           }
-          // اختبار حقيقي للمنبّه: يصل بعد دقيقة حتى لو أغلقت التطبيق وأطفأت الشاشة
           if (window.AndroidBridge.scheduleTestAlarm) {
             window.AndroidBridge.scheduleTestAlarm(60);
-            setTimeout(() => toast('سيصلك تنبيه آخر بعد دقيقة — أغلق التطبيق وأطفئ الشاشة للاختبار'), 1800);
+            setTimeout(() => toast('سيصلك تنبيه بعد دقيقة للاختبار'), 1800);
           }
-        } catch (e) { toast('خطأ في الإشعار'); }
+        } catch (e) { toast('خطأ في إرسال الإشعار'); }
       }, 1000);
       return;
     }
-    if (!('Notification' in window)) return toast('التنبيهات غير مدعومة');
+    if (!('Notification' in window)) return toast('التنبيهات غير مدعومة في متصفحك');
     if (Notification.permission === 'denied') {
-      alert('تم رفض التنبيهات سابقاً. راجع إعدادات الموقع في المتصفح.');
+      alert('تم رفض إذن التنبيهات سابقاً. يرجى تفعيلها من إعدادات المتصفح.');
       return;
     }
     if (Notification.permission === 'granted') {
-      new Notification(title, { body });
+      try {
+        new Notification(title, { body });
+        toast('تم إرسال الإشعار التجريبي');
+      } catch(e) { toast('تعذر إرسال الإشعار'); }
       return;
     }
     Notification.requestPermission().then(p => {
-      if (p === 'granted') new Notification(title, { body });
+      if (p === 'granted') {
+        try { new Notification(title, { body }); toast('تم إرسال الإشعار التجريبي'); } catch(e){}
+      } else {
+        toast('لم يتم منح إذن التنبيهات');
+      }
     });
   };
+
   $('#sx', s).onclick = doExport;
   $('#si', s).onclick = () => $('#file').click();
   $('#stypes', s).onclick = openTypesManager;
@@ -2074,9 +2087,9 @@ function openPhonebook() {
     }
     persist();
     render();
-    toast('✅ تم إصلاح ' + fixed + ' سجل (وتم التحقق من الباقي)');
+    toast('✅ تم إصلاح ' + fixed + ' سجل');
   };
-  $('#sd', s).onclick = () => confirmDlg('سيتم حذف جميع المناسبات والمهام المسجلة في هذا الحساب نهائيًا. يُنصح بتصديرها إلى Excel أولًا. هل تريد المتابعة؟', () => { S.data.entries = []; persist(); render(); toast('تم حذف كل البيانات'); }, 'حذف الكل');
+  $('#sd', s).onclick = () => confirmDlg('سيتم حذف جميع المناسبات والمهام المسجلة في هذا الحساب نهائيًا. هل تريد المتابعة؟', () => { S.data.entries = []; persist(); render(); toast('تم حذف كل البيانات'); }, 'حذف الكل');
   $('#sp', s).onclick = () => openPinForm({});
   $('#spw', s).onclick = () => openPwForm();
   $('#sl', s).onclick = () => lockNow(false);
@@ -2090,13 +2103,13 @@ function openPhonebook() {
     }
     window.open('mailto:' + DESIGNER.email + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body), '_blank');
   };
-    // ---- إدارة التذكيرات المتكررة ----
+  
   const drawRepeats = () => {
     const arr = Array.isArray(S.set.notify.repeats) ? S.set.notify.repeats : [];
     const box = $('#rptlist', s);
     if (!box) return;
     if (!arr.length) {
-      box.innerHTML = '<div class="hint" style="color:#ff9d6b">لا توجد تذكيرات — اضغط "➕ إضافة تذكير" لإضافة واحد</div>';
+      box.innerHTML = '<div class="hint" style="color:#ff9d6b">لا توجد تذكيرات</div>';
       return;
     }
     box.innerHTML = arr.map((r, i) => {
@@ -2115,7 +2128,6 @@ function openPhonebook() {
       '</div>';
     }).join('');
 
-    // ربط الأحداث
     $$('#rptlist input[data-i]', s).forEach(inp => {
       inp.addEventListener('change', () => {
         const i = +inp.dataset.i;
@@ -2147,7 +2159,6 @@ function openPhonebook() {
     });
   };
 
-  // استدعاء أولي بعد تأكد من وجود #rptlist
   setTimeout(drawRepeats, 0);
 
   const rptenEl = $('#rpten', s);
@@ -2165,32 +2176,28 @@ function openPhonebook() {
     drawRepeats();
     try { syncAlarmsToAndroid(); } catch (e) {}
   });
-    if ($('#rptadd', s)) $('#rptadd', s).onclick = () => {
-    S.set.notify.repeats.push({ hours: 2, enabled: true });
-    persist(); drawRepeats(); syncAlarmsToAndroid();
-  };
-    const updateNotifStatus = () => {
+
+  const updateNotifStatus = () => {
     const el = $('#nstatus', s);
     if (!el) return;
     if (window.AndroidBridge) {
-      el.innerHTML = '📱 وضع التطبيق — التنبيهات تُدار عبر النظام';
+      el.innerHTML = '📱 نظام الأندرويد متصل — التنبيهات تعمل في الخلفية';
       el.style.color = '#4caf50';
       return;
     }
     if (!('Notification' in window)) {
-      el.innerHTML = '⚠️ التنبيهات غير مدعومة في هذا المتصفح';
+      el.innerHTML = '⚠️ التنبيهات غير مدعومة';
       el.style.color = '#ff9d6b';
       return;
     }
     const perm = Notification.permission;
     if (perm === 'granted') { el.innerHTML = '✅ التنبيهات مسموحة'; el.style.color = '#4caf50'; }
-    else if (perm === 'denied') { el.innerHTML = '❌ التنبيهات محظورة — افتح إعدادات الموقع في المتصفح'; el.style.color = '#ff6b6b'; }
-    else { el.innerHTML = '⏳ اضغط "اختبار التنبيه" للموافقة'; el.style.color = '#f49426'; }
+    else if (perm === 'denied') { el.innerHTML = '❌ التنبيهات محظورة من المتصفح'; el.style.color = '#ff6b6b'; }
+    else { el.innerHTML = '⏳ اضغط "اختبار التنبيه" لطلب الموافقة'; el.style.color = '#f49426'; }
   };
   updateNotifStatus();
   pv();
 }
-  
   /* ---------- account: PIN / password ---------- */
 function updateUser(patch) {
   const us = users(), i = us.findIndex(x => x.id === S.user.id); if (i < 0) return false;
