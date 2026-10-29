@@ -20,10 +20,10 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # تثبيت منصات وحزم الأندرويد الأساسية مباشرة عبر أداة سطر الأوامر دون الاعتماد على الإجراء القديم
-      - name: Setup Android SDK manually
-        run: |
-          echo "y" | sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
+      # الإجراء الرسمي الصحيح لتثبيت منصات وأدوات أندرويد دون أخطاء
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-34 build-tools;34.0.0 platform-tools'
 
       - uses: gradle/actions/setup-gradle@v4
         with:
